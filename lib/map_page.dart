@@ -11,7 +11,7 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   // 北京坐标 (GCJ-02坐标系，适用于高德地图)
-  final LatLng beijingCenter = const LatLng(39.9087, 116.3976); // 已转换为GCJ-02
+  final LatLng beijingCenter = const LatLng(39.9087, 116.3976);
   final MapController _mapController = MapController();
   double _currentZoom = 12.0;
 
@@ -36,12 +36,9 @@ class _MapPageState extends State<MapPage> {
               },
             ),
             children: [
-              // 高德地图瓦片层
+              // 高德地图瓦片层 - 使用矢量地图
               TileLayer(
-                // 高德地图卫星图
-                urlTemplate: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-                // 高德地图路网图层
-                // urlTemplate: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                urlTemplate: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
                 subdomains: const ['1', '2', '3', '4'],
                 maxZoom: 18,
                 minZoom: 3,

@@ -1,5 +1,5 @@
-name: baidu_map_demo
-description: "A new Flutter project with Baidu Map integration"
+name: amap_demo
+description: "A new Flutter project with AMap integration"
 publish_to: 'none'
 
 environment:
@@ -8,13 +8,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_bmflocation: ^3.3.0
-  flutter_baidu_mapapi_map: ^3.3.1
-  flutter_baidu_mapapi_base: ^3.3.1
-  flutter_baidu_mapapi_search: ^3.3.1
-  cupertino_icons: ^1.0.2
   flutter_map: ^5.0.0
   latlong2: ^0.9.0
+  cupertino_icons: ^1.0.2
 
 dev_dependencies:
   flutter_test:

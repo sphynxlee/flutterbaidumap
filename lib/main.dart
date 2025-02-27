@@ -11,7 +11,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Baidu Map Demo',
+      title: 'Flutter 高德地图 Demo',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),

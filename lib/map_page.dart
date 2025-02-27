@@ -10,7 +10,7 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  // 北京坐标 (GCJ-02坐标系，适用于高德地图)
+  // beijing coordinates (GCJ-02 coordinate system, suitable for AMap)
   final LatLng beijingCenter = const LatLng(39.9087, 116.3976);
   final MapController _mapController = MapController();
   double _currentZoom = 12.0;
@@ -36,14 +36,18 @@ class _MapPageState extends State<MapPage> {
               },
             ),
             children: [
-              // 高德地图瓦片层 - 使用矢量地图
+              // AMap tile layer - using vector map style
               TileLayer(
-                urlTemplate: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                urlTemplate: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',
                 subdomains: const ['1', '2', '3', '4'],
                 maxZoom: 18,
                 minZoom: 3,
+                // Add HTTP headers to handle referer restrictions
+                additionalOptions: const {
+                  'referrerPolicy': 'no-referrer-when-downgrade',
+                },
               ),
-              // 标记点
+              // marker point
               MarkerLayer(
                 markers: [
                   Marker(
@@ -60,7 +64,7 @@ class _MapPageState extends State<MapPage> {
               ),
             ],
           ),
-          // 缩放控制按钮
+          // zoom control buttons
           Positioned(
             right: 16.0,
             bottom: 16.0,

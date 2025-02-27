@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_baidu_mapapi_base/flutter_baidu_mapapi_base.dart';
-import 'package:flutter_baidu_mapapi_map/flutter_baidu_mapapi_map.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -10,67 +10,92 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  late BMFMapController _mapController;
-
-  @override
-  void initState() {
-    super.initState();
-    // 百度地图初始化
-    BMFMapSDK.setAgreePrivacy(true);
-    BMFMapSDK.setApiKeyAndCoordType(
-      'qDTXqaahwzKE8igpc8HnOtaH5QuiJ',
-      BMF_COORD_TYPE.BD09LL
-    );
-  }
+  // 北京坐标 (GCJ-02坐标系，适用于高德地图)
+  final LatLng beijingCenter = const LatLng(39.9087, 116.3976); // 已转换为GCJ-02
+  final MapController _mapController = MapController();
+  double _currentZoom = 12.0;
 
   @override
   Widget build(BuildContext context) {
-    // 北京坐标
-    BMFCoordinate beijingCoord = BMFCoordinate(39.915, 116.404);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter Baidu Map'),
+        title: const Text('Flutter 高德地图'),
         backgroundColor: Colors.blue,
       ),
-      body: BMFMapWidget(
-        onBMFMapCreated: (controller) {
-          _mapController = controller;
-
-          // 设置自定义瓦片图层
-          BMFURLTileLayer baseLayer = BMFURLTileLayer(
-            urlTemplate: 'http://online{s}.map.bdimg.com/tile/?qt=vtile&x={x}&y={y}&z={z}&styles=pl&scaler=1&udt=',
-            subdomains: ['0', '1', '2', '3'],
-            maximumZ: 18,
-            minimumZ: 3,
-          );
-          _mapController.addTileLayer(baseLayer);
-
-          BMFURLTileLayer labelLayer = BMFURLTileLayer(
-            urlTemplate: 'http://online{s}.map.bdimg.com/onlinelabel/?qt=tile&x={x}&y={y}&z={z}',
-            subdomains: ['0', '1', '2', '3'],
-            maximumZ: 18,
-            minimumZ: 3,
-          );
-          _mapController.addTileLayer(labelLayer);
-
-          // 添加标记点
-          BMFMarker marker = BMFMarker(
-            position: beijingCoord,
-            title: '北京',
-            identifier: 'beijing_marker',
-          );
-          _mapController.addMarker(marker);
-        },
-        mapOptions: BMFMapOptions(
-          center: beijingCoord,
-          zoomLevel: 12,
-          maxZoomLevel: 18,
-          minZoomLevel: 3,
-          baseIndoorMapEnabled: false,
-          showMapPoi: true,
-          mapType: BMFMapType.None, // 使用空白底图，因为我们要使用自定义瓦片
-        ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              center: beijingCenter,
+              zoom: _currentZoom,
+              maxZoom: 18,
+              minZoom: 3,
+              onMapReady: () {
+                _mapController.move(beijingCenter, _currentZoom);
+              },
+            ),
+            children: [
+              // 高德地图瓦片层
+              TileLayer(
+                // 高德地图卫星图
+                urlTemplate: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+                // 高德地图路网图层
+                // urlTemplate: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                subdomains: const ['1', '2', '3', '4'],
+                maxZoom: 18,
+                minZoom: 3,
+              ),
+              // 标记点
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    width: 40.0,
+                    height: 40.0,
+                    point: beijingCenter,
+                    builder: (ctx) => const Icon(
+                      Icons.location_on,
+                      color: Colors.red,
+                      size: 40.0,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // 缩放控制按钮
+          Positioned(
+            right: 16.0,
+            bottom: 16.0,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'zoom_in',
+                  mini: true,
+                  child: const Icon(Icons.add),
+                  onPressed: () {
+                    setState(() {
+                      _currentZoom = (_currentZoom + 1).clamp(3.0, 18.0);
+                      _mapController.move(_mapController.center, _currentZoom);
+                    });
+                  },
+                ),
+                const SizedBox(height: 8.0),
+                FloatingActionButton(
+                  heroTag: 'zoom_out',
+                  mini: true,
+                  child: const Icon(Icons.remove),
+                  onPressed: () {
+                    setState(() {
+                      _currentZoom = (_currentZoom - 1).clamp(3.0, 18.0);
+                      _mapController.move(_mapController.center, _currentZoom);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

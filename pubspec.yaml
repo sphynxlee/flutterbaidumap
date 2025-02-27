@@ -1,0 +1,23 @@
+name: baidu_map_demo
+description: "A new Flutter project with Baidu Map integration"
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bmflocation: ^3.3.0
+  flutter_baidu_mapapi_map: ^3.3.1
+  flutter_baidu_mapapi_base: ^3.3.1
+  flutter_baidu_mapapi_search: ^3.3.1
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true

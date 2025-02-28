@@ -9,13 +9,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <application
-        android:label="baidu_map_demo"
+        android:label="amap_map_demo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
         <!-- 百度地图 AK -->
         <meta-data
-            android:name="com.baidu.lbsapi.API_KEY"
+            android:name="com.amap.lbsapi.API_KEY"
             android:value="qDTXqaahwzKE8igpc8HnOtaH5QuiJ"/>
 
         // ... existing code ...

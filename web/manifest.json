@@ -1,6 +1,6 @@
 {
-    "name": "baidu_map_demo",
-    "short_name": "baidu_map_demo",
+    "name": "amap_map_demo",
+    "short_name": "amap_map_demo",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,67 @@ import 'package:flutter/services.dart';
 
 typedef CellGetter = String Function(int row, int col);
 typedef CellSetter = void Function(int row, int col, String value);
+
+int _colForContentX(List<double> colStarts, double x) {
+  // colStarts length is cols+1 (last is total width).
+  final int cols = colStarts.length - 1;
+  if (cols <= 1) return 0;
+  if (x <= 0) return 0;
+  if (x >= colStarts[cols]) return cols - 1;
+
+  int lo = 0;
+  int hi = cols; // exclusive upper bound in colStarts indices
+  // Find the largest index lo such that colStarts[lo] <= x.
+  while (lo + 1 < hi) {
+    final int mid = (lo + hi) >> 1;
+    if (colStarts[mid] <= x) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo.clamp(0, cols - 1);
+}
+
+class _LruTextPainterCache {
+  _LruTextPainterCache({required this.capacity});
+
+  final int capacity;
+  final LinkedHashMap<int, TextPainter> _map = LinkedHashMap<int, TextPainter>();
+
+  void clear() => _map.clear();
+
+  TextPainter get({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    final double clamped = math.max(0, maxWidth);
+    // Width bucketing to reduce cache key explosion.
+    final int widthBucket = clamped.floor();
+    final int key = Object.hash(text, widthBucket, style);
+
+    final TextPainter? hit = _map.remove(key);
+    if (hit != null) {
+      // Re-insert to mark as most-recently-used.
+      _map[key] = hit;
+      return hit;
+    }
+
+    final TextPainter tp = TextPainter(
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+      text: TextSpan(text: text, style: style),
+    )..layout(maxWidth: clamped);
+
+    _map[key] = tp;
+    if (_map.length > capacity) {
+      _map.remove(_map.keys.first);
+    }
+    return tp;
+  }
+}
 
 class HighPerfGrid extends StatefulWidget {
   const HighPerfGrid({
@@ -62,6 +124,11 @@ class _HighPerfGridState extends State<HighPerfGrid> {
   // Frame stats (approx).
   double _lastFrameMs = 0;
   int _paintedCellsLastFrame = 0;
+
+  final _LruTextPainterCache _headerTextCache = _LruTextPainterCache(capacity: 200);
+  final _LruTextPainterCache _cellTextCache = _LruTextPainterCache(capacity: 5000);
+  int _headerStyleSig = 0;
+  int _cellStyleSig = 0;
 
   @override
   void initState() {
@@ -146,13 +213,7 @@ class _HighPerfGridState extends State<HighPerfGrid> {
 
   int _colAtX(double x) {
     // x is in content space (already includes scrollX).
-    // cols are few (<= 50), linear scan is fine and avoids allocations.
-    for (int c = 0; c < widget.cols; c++) {
-      final double start = _colStarts[c];
-      final double end = _colStarts[c + 1];
-      if (x >= start && x < end) return c;
-    }
-    return widget.cols - 1;
+    return _colForContentX(_colStarts, x);
   }
 
   int _rowAtY(double y) {
@@ -227,6 +288,23 @@ class _HighPerfGridState extends State<HighPerfGrid> {
         _clampScrollToViewport(lastViewportSize: viewportSize);
 
         final ThemeData theme = Theme.of(context);
+        final TextStyle headerStyle =
+            theme.textTheme.labelMedium?.copyWith(fontSize: 12) ??
+                const TextStyle(fontSize: 12);
+        final TextStyle cellStyle =
+            theme.textTheme.bodySmall?.copyWith(fontSize: 13) ??
+                const TextStyle(fontSize: 13);
+
+        final int newHeaderSig = headerStyle.hashCode;
+        if (newHeaderSig != _headerStyleSig) {
+          _headerStyleSig = newHeaderSig;
+          _headerTextCache.clear();
+        }
+        final int newCellSig = cellStyle.hashCode;
+        if (newCellSig != _cellStyleSig) {
+          _cellStyleSig = newCellSig;
+          _cellTextCache.clear();
+        }
 
         final Widget painted = RepaintBoundary(
           child: CustomPaint(
@@ -245,6 +323,10 @@ class _HighPerfGridState extends State<HighPerfGrid> {
               selectedCol: _selCol,
               getCell: widget.getCell,
               theme: theme,
+              headerStyle: headerStyle,
+              cellStyle: cellStyle,
+              headerTextCache: _headerTextCache,
+              cellTextCache: _cellTextCache,
               onPaintedCells: (n) => _paintedCellsLastFrame = n,
             ),
             size: Size.infinite,
@@ -445,6 +527,10 @@ class _GridPainter extends CustomPainter {
     required this.selectedCol,
     required this.getCell,
     required this.theme,
+    required this.headerStyle,
+    required this.cellStyle,
+    required this.headerTextCache,
+    required this.cellTextCache,
     required this.onPaintedCells,
   });
 
@@ -462,6 +548,10 @@ class _GridPainter extends CustomPainter {
   final int? selectedCol;
   final CellGetter getCell;
   final ThemeData theme;
+  final TextStyle headerStyle;
+  final TextStyle cellStyle;
+  final _LruTextPainterCache headerTextCache;
+  final _LruTextPainterCache cellTextCache;
   final ValueChanged<int> onPaintedCells;
 
   final Paint _bg = Paint()..style = PaintingStyle.fill;
@@ -469,12 +559,6 @@ class _GridPainter extends CustomPainter {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.0;
   final Paint _sel = Paint()..style = PaintingStyle.fill;
-
-  final TextPainter _tp = TextPainter(
-    textDirection: TextDirection.ltr,
-    maxLines: 1,
-    ellipsis: '…',
-  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -493,14 +577,10 @@ class _GridPainter extends CustomPainter {
     _gridLine.color = theme.dividerColor;
 
     // Visible cols (including overscan).
-    int firstCol = 0;
-    while (firstCol < cols - 1 && colStarts[firstCol + 1] <= scrollX) {
-      firstCol++;
-    }
-    int lastCol = firstCol;
-    while (lastCol < cols - 1 && colStarts[lastCol] < scrollX + w) {
-      lastCol++;
-    }
+    int firstCol = _colForContentX(colStarts, scrollX);
+    // Use a tiny epsilon so the column starting exactly at (scrollX+w) isn't included.
+    final double endX = math.max(0, scrollX + w - 0.0001);
+    int lastCol = _colForContentX(colStarts, endX);
     firstCol = (firstCol - overscanCols).clamp(0, cols - 1);
     lastCol = (lastCol + overscanCols).clamp(0, cols - 1);
 
@@ -520,12 +600,12 @@ class _GridPainter extends CustomPainter {
       // Header cell border.
       canvas.drawRect(Rect.fromLTWH(x, 0, cw, headerHeight), _gridLine);
 
-      _tp.text = TextSpan(
+      final TextPainter tp = headerTextCache.get(
         text: 'Col $c',
-        style: theme.textTheme.labelMedium?.copyWith(fontSize: 12),
+        style: headerStyle,
+        maxWidth: cw - 10,
       );
-      _tp.layout(maxWidth: math.max(0, cw - 10));
-      _tp.paint(canvas, Offset(x + 6, (headerHeight - _tp.height) / 2));
+      tp.paint(canvas, Offset(x + 6, (headerHeight - tp.height) / 2));
     }
 
     // Clip to body region.
@@ -557,12 +637,12 @@ class _GridPainter extends CustomPainter {
         canvas.drawRect(rect, _gridLine);
 
         final String text = getCell(r, c);
-        _tp.text = TextSpan(
+        final TextPainter tp = cellTextCache.get(
           text: text,
-          style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
+          style: cellStyle,
+          maxWidth: cw - 10,
         );
-        _tp.layout(maxWidth: math.max(0, cw - 10));
-        _tp.paint(canvas, Offset(x + 6, y + (rowHeight - _tp.height) / 2));
+        tp.paint(canvas, Offset(x + 6, y + (rowHeight - tp.height) / 2));
 
         painted++;
       }
@@ -583,6 +663,8 @@ class _GridPainter extends CustomPainter {
         oldDelegate.cols != cols ||
         oldDelegate.rowHeight != rowHeight ||
         oldDelegate.headerHeight != headerHeight ||
+        oldDelegate.headerStyle != headerStyle ||
+        oldDelegate.cellStyle != cellStyle ||
         !listEquals(oldDelegate.colWidths, colWidths);
   }
 }

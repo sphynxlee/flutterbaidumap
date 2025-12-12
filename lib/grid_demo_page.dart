@@ -10,7 +10,7 @@ class GridDemoPage extends StatefulWidget {
 }
 
 class _GridDemoPageState extends State<GridDemoPage> {
-  static const int _rows = 200000;
+  static const int _rows = 200;
   static const int _cols = 50;
 
   /// Stores only edited values to keep memory usage small.
